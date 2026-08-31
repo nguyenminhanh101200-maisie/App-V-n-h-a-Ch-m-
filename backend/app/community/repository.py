@@ -22,6 +22,9 @@ def _to_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
 
+def _to_str(value: Any) -> str | None:
+    return str(value) if value is not None and str(value).strip() != "" else None
+
 
 class CommunityRepository:
     def __init__(self, pool: AsyncConnectionPool) -> None:
@@ -36,7 +39,7 @@ class CommunityRepository:
         page: int,
         limit: int,
     ) -> tuple[list[dict[str, Any]], bool]:
-        cu = _to_int(current_user_id) or -1
+        cu = _to_str(current_user_id)
         offset = (page - 1) * limit
         order_sql = (
             "like_count DESC, p.created_at DESC, p.id DESC"
@@ -135,7 +138,7 @@ class CommunityRepository:
         }
 
     async def post_exists(self, post_id: str) -> bool:
-        pid = _to_int(post_id)
+        pid = _to_str(post_id)
         if pid is None:
             return False
         async with self.pool.connection() as conn:
@@ -144,7 +147,7 @@ class CommunityRepository:
                 return await cur.fetchone() is not None
 
     async def get_post_for_share(self, post_id: str) -> dict[str, Any] | None:
-        pid = _to_int(post_id)
+        pid = _to_str(post_id)
         if pid is None:
             return None
         async with self.pool.connection() as conn:
@@ -180,9 +183,9 @@ class CommunityRepository:
                     (
                         content,
                         image_url,
-                        _to_int(user_id),
+                        _to_str(user_id),
                         to_db_category(category),
-                        _to_int(shared_post_id) if shared_post_id is not None else None,
+                        _to_str(shared_post_id) if shared_post_id is not None else None,
                     ),
                 )
                 row = await cur.fetchone()
@@ -197,13 +200,13 @@ class CommunityRepository:
                     VALUES (%s, %s, %s)
                     RETURNING id::text AS id, created_at, content
                     """,
-                    (content, _to_int(user_id), _to_int(post_id)),
+                    (content, _to_str(user_id), _to_str(post_id)),
                 )
                 row = await cur.fetchone()
         return dict(row)
 
     async def list_comments(self, post_id: str) -> list[dict[str, Any]]:
-        pid = _to_int(post_id)
+        pid = _to_str(post_id)
         if pid is None:
             return []
         async with self.pool.connection() as conn:
@@ -240,8 +243,8 @@ class CommunityRepository:
         ]
 
     async def toggle_like(self, *, post_id: str, user_id: str) -> tuple[bool, int]:
-        pid = _to_int(post_id)
-        uid = _to_int(user_id)
+        pid = _to_str(post_id)
+        uid = _to_str(user_id)
         if pid is None or uid is None:
             raise LookupError("POST_NOT_FOUND")
         async with self.pool.connection() as conn:
@@ -295,33 +298,44 @@ class CommunityRepository:
             for r in rows
         ]
 
-    async def active_members(self) -> list[dict[str, Any]]:
+    async def toggle_follow(self, follower_id: Any, following_id: Any) -> bool:
+        fid = _to_str(follower_id)
+        tid = _to_str(following_id)
+        if fid is None or tid is None:
+            raise LookupError("USER_NOT_FOUND")
+            
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
+                # Kiểm tra following_id có tồn tại trong users không
+                await cur.execute("SELECT 1 FROM users WHERE id = %s FOR UPDATE", (tid,))
+                if await cur.fetchone() is None:
+                    raise LookupError("USER_NOT_FOUND")
+
                 await cur.execute(
-                    """
-                    SELECT
-                        p.user_id::text AS user_id,
-                        u.username AS username,
-                        u.avatar_url AS avatar_url,
-                        COUNT(p.id) AS post_count
-                    FROM posts p
-                    JOIN users u ON u.id = p.user_id
-                    GROUP BY p.user_id, u.username, u.avatar_url
-                    ORDER BY post_count DESC, u.username ASC
-                    LIMIT 5
-                    """
+                    "SELECT 1 FROM follows WHERE follower_id = %s AND following_id = %s",
+                    (fid, tid),
                 )
-                rows = [dict(r) for r in await cur.fetchall()]
-        return [
-            {
-                "user_id": r["user_id"],
-                "username": r["username"] or "Người dùng",
-                "avatar_url": r["avatar_url"],
-                "post_count": int(r["post_count"]),
-            }
-            for r in rows
-        ]
+                existing = await cur.fetchone()
+
+                if existing:
+                    await cur.execute(
+                        "DELETE FROM follows WHERE follower_id = %s AND following_id = %s",
+                        (fid, tid),
+                    )
+                    following = False
+                else:
+                    await cur.execute(
+                        """
+                        INSERT INTO follows (follower_id, following_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (follower_id, following_id) DO NOTHING
+                        """,
+                        (fid, tid),
+                    )
+                    following = True
+
+        return following
+
 
     @staticmethod
     def _decode_image_urls(value: str | None) -> list[str]:

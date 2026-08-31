@@ -34,7 +34,6 @@
     feedState: $("feedState"),
     postsContainer: $("postsContainer"),
     topicList: $("topicListContainer"),
-    activeMembers: $("activeMemberContainer"),
     openMyProfileBtn: $("openMyProfileBtn"),
     openPostModalBtn: $("openPostModalBtn"),
     // create post modal
@@ -62,12 +61,26 @@
     // profile view
     profileView: $("profileView"),
     profileAvatar: $("profileAvatar"),
+    directEditAvatarBtn: $("directEditAvatarBtn"),
+    directAvatarInput: $("directAvatarInput"),
     profileViewTitle: $("profileViewTitle"),
     profileEmail: $("profileEmail"),
     profilePostCount: $("profilePostCount"),
+    profileFollowersCount: $("profileFollowersCount"),
+    profileFollowingCount: $("profileFollowingCount"),
     profileState: $("profileState"),
     profilePostsContainer: $("profilePostsContainer"),
     backToCommunityBtn: $("backToCommunityBtn"),
+    editProfileBtn: $("editProfileBtn"),
+    followUserBtn: $("followUserBtn"),
+    // edit profile modal
+    editProfileModal: $("editProfileModal"),
+    editProfileForm: $("editProfileForm"),
+    editAvatarInput: $("editAvatarInput"),
+    editAvatarPreview: $("editAvatarPreview"),
+    editUsernameInput: $("editUsernameInput"),
+    editProfileStatus: $("editProfileStatus"),
+    editProfileSubmitBtn: $("editProfileSubmitBtn"),
     // search
     searchToggleBtn: $("searchToggleBtn"),
     searchBar: $("searchBar"),
@@ -233,9 +246,9 @@
     return `
       <div class="embedded-post-box">
         <div class="embedded-header">
-          <img class="embedded-avatar" src="${escapeHtml(avatarOf(orig.author && orig.author.avatar_url))}" alt="">
+          <img class="embedded-avatar author-link" data-user-id="${escapeHtml(orig.author && orig.author.id)}" src="${escapeHtml(avatarOf(orig.author && orig.author.avatar_url))}" alt="" loading="lazy">
           <div>
-            <span class="embedded-name">${escapeHtml(orig.author ? orig.author.username : "Người dùng")}</span>
+            <span class="embedded-name author-link" data-user-id="${escapeHtml(orig.author && orig.author.id)}">${escapeHtml(orig.author ? orig.author.username : "Người dùng")}</span>
             <span class="embedded-time">${escapeHtml(relativeTime(orig.created_at))}</span>
           </div>
         </div>
@@ -450,6 +463,21 @@
     event.preventDefault();
     const content = dom.postContentInput ? dom.postContentInput.value.trim() : "";
     const category = dom.topicSelect ? dom.topicSelect.value : "";
+    
+    // Clear previous error if any
+    if (dom.topicSelect) {
+      dom.topicSelect.classList.remove("input-error");
+    }
+
+    if (!category) {
+      toast("Vui lòng chọn một chuyên mục cho bài viết.", "error");
+      if (dom.topicSelect) {
+        dom.topicSelect.classList.add("input-error");
+        dom.topicSelect.focus();
+      }
+      return;
+    }
+
     if (!content && state.selectedFiles.length === 0) {
       toast("Vui lòng nhập nội dung hoặc chọn ảnh.", "info");
       return;
@@ -469,7 +497,15 @@
       toast("Đăng bài thành công!", "success");
       await Promise.all([loadFeed(), loadSidebar()]);
     } catch (err) {
-      toast(err.message, "error");
+      if (err.body && err.body.error === "CATEGORY_REQUIRED") {
+        toast(err.body.message || "Vui lòng chọn một chuyên mục cho bài viết.", "error");
+        if (dom.topicSelect) {
+          dom.topicSelect.classList.add("input-error");
+          dom.topicSelect.focus();
+        }
+      } else {
+        toast(err.message || "Không thể đăng bài.", "error");
+      }
     } finally {
       dom.submitPostBtn.disabled = false;
       dom.submitPostBtn.innerHTML = original;
@@ -488,9 +524,9 @@
       dom.shareOriginalPreview.innerHTML = `
         <div class="embedded-post-box">
           <div class="embedded-header">
-            <img class="embedded-avatar" src="${escapeHtml(avatarOf(post.author && post.author.avatar_url))}" alt="">
+            <img class="embedded-avatar author-link" data-user-id="${escapeHtml(post.author && post.author.id)}" src="${escapeHtml(avatarOf(post.author && post.author.avatar_url))}" alt="" loading="lazy">
             <div>
-              <span class="embedded-name">${escapeHtml(post.author ? post.author.username : "Người dùng")}</span>
+              <span class="embedded-name author-link" data-user-id="${escapeHtml(post.author && post.author.id)}">${escapeHtml(post.author ? post.author.username : "Người dùng")}</span>
               <span class="embedded-time">${escapeHtml(relativeTime(post.created_at))}</span>
             </div>
           </div>
@@ -527,7 +563,7 @@
   // Sidebar
   // ----------------------------------------------------------------------- //
   async function loadSidebar() {
-    await Promise.all([loadTopics(), loadActiveMembers()]);
+    await loadTopics();
   }
 
   async function loadTopics() {
@@ -551,30 +587,7 @@
     }
   }
 
-  async function loadActiveMembers() {
-    if (!dom.activeMembers) return;
-    try {
-      const data = await apiFetch(`${API}/stats/active-members`);
-      const items = data.items || [];
-      dom.activeMembers.innerHTML = items.length
-        ? items
-            .map(
-              (m, i) => `
-          <div class="active-member">
-            <img class="member-avatar author-link" data-user-id="${escapeHtml(m.user_id)}" src="${escapeHtml(avatarOf(m.avatar_url))}" alt="" loading="lazy">
-            <div class="member-info">
-              <span class="member-name author-link" data-user-id="${escapeHtml(m.user_id)}">${escapeHtml(m.username)}</span>
-              <span class="member-stats">${m.post_count} bài viết</span>
-            </div>
-            <span class="rank-badge">${i + 1}</span>
-          </div>`
-            )
-            .join("")
-        : '<p class="member-stats">Chưa có thành viên nào.</p>';
-    } catch {
-      dom.activeMembers.innerHTML = '<p class="member-stats">Không tải được dữ liệu.</p>';
-    }
-  }
+
 
   // ----------------------------------------------------------------------- //
   // Profile view
@@ -619,13 +632,163 @@
       } else {
         dom.profileEmail.classList.add("is-hidden");
       }
-      dom.profilePostCount.textContent = `${profile.post_count} bài viết`;
+      if (state.currentUser && String(userId) === String(state.currentUser.id)) {
+        dom.editProfileBtn.classList.remove("is-hidden");
+        if (dom.directEditAvatarBtn) dom.directEditAvatarBtn.classList.remove("is-hidden");
+        dom.editUsernameInput.value = u.username || "";
+        if (dom.followUserBtn) dom.followUserBtn.classList.add("is-hidden");
+      } else {
+        dom.editProfileBtn.classList.add("is-hidden");
+        if (dom.directEditAvatarBtn) dom.directEditAvatarBtn.classList.add("is-hidden");
+        if (dom.followUserBtn) {
+          dom.followUserBtn.classList.remove("is-hidden");
+          dom.followUserBtn.dataset.userId = u.id;
+          if (profile.is_following) {
+            dom.followUserBtn.textContent = "Đang theo dõi";
+            dom.followUserBtn.classList.remove("btn-primary");
+            dom.followUserBtn.classList.add("btn-secondary");
+          } else {
+            dom.followUserBtn.textContent = "Theo dõi";
+            dom.followUserBtn.classList.remove("btn-secondary");
+            dom.followUserBtn.classList.add("btn-primary");
+          }
+        }
+      }
+      if (dom.profilePostCount) dom.profilePostCount.textContent = String(profile.post_count || 0);
+      if (dom.profileFollowersCount) dom.profileFollowersCount.textContent = String(profile.followers_count || 0);
+      if (dom.profileFollowingCount) dom.profileFollowingCount.textContent = String(profile.following_count || 0);
       dom.profileState.innerHTML = "";
       dom.profilePostsContainer.innerHTML = allItems.length
         ? allItems.map(postCardHtml).join("")
         : stateCard("fa-feather", "Chưa có bài viết", "Người dùng này chưa đăng bài nào.");
     } catch (err) {
       dom.profileState.innerHTML = stateCard("fa-triangle-exclamation", "Không tải được hồ sơ", err.message);
+    }
+  }
+
+  async function submitEditProfile(event) {
+    event.preventDefault();
+    const fd = new FormData(dom.editProfileForm);
+    
+    dom.editProfileSubmitBtn.disabled = true;
+    const original = dom.editProfileSubmitBtn.innerHTML;
+    dom.editProfileSubmitBtn.innerHTML = '<span class="inline-spinner"></span> Đang lưu...';
+    dom.editProfileStatus.textContent = "";
+    dom.editProfileStatus.style.color = "blue";
+    
+    try {
+      const res = await apiFetch(`/api/auth/me`, { method: "PATCH", body: fd });
+      if (res.user) {
+        state.currentUser = res.user;
+        renderIdentity();
+        openProfile(state.currentUser.id, false);
+      }
+      closeModal(dom.editProfileModal);
+      toast("Cập nhật hồ sơ thành công!", "success");
+    } catch (err) {
+      dom.editProfileStatus.style.color = "red";
+      dom.editProfileStatus.textContent = err.message || "Đã xảy ra lỗi khi lưu thông tin.";
+    } finally {
+      dom.editProfileSubmitBtn.disabled = false;
+      dom.editProfileSubmitBtn.innerHTML = original;
+    }
+  }
+
+  async function handleDirectAvatarUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast("Vui lòng chọn file hình ảnh.", "error");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Kích thước ảnh tối đa là 5MB.", "error");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("avatar", file);
+
+    const prevSrc = dom.profileAvatar.src;
+    dom.profileAvatar.src = "/avatarmacdinh.svg"; // Tạm thời hiện loading/mặc định
+
+    try {
+      const res = await apiFetch(`/api/auth/me`, { method: "PATCH", body: fd });
+      if (res.user) {
+        state.currentUser = res.user;
+        renderIdentity();
+        if (state.currentUser.id) {
+            openProfile(state.currentUser.id, false);
+        }
+        toast("Cập nhật ảnh đại diện thành công!", "success");
+      }
+    } catch (err) {
+      dom.profileAvatar.src = prevSrc;
+      toast(err.message || "Lỗi khi tải ảnh lên.", "error");
+    } finally {
+      event.target.value = ""; // Xóa input để lần sau chọn lại file cùng tên vẫn chạy onchange
+    }
+  }
+
+  async function toggleFollow(userId) {
+    if (!state.currentUser) {
+      toast("Vui lòng đăng nhập để theo dõi.", "error");
+      return;
+    }
+
+    const btn = dom.followUserBtn;
+    if (!btn) return;
+    
+    // Optimistic Update
+    const isCurrentlyFollowing = btn.classList.contains("btn-secondary");
+    btn.disabled = true;
+    
+    let currentFollowers = 0;
+    if (dom.profileFollowersCount) {
+        currentFollowers = parseInt(dom.profileFollowersCount.textContent, 10) || 0;
+    }
+
+    if (isCurrentlyFollowing) {
+      btn.textContent = "Theo dõi";
+      btn.classList.remove("btn-secondary");
+      btn.classList.add("btn-primary");
+      if (dom.profileFollowersCount) dom.profileFollowersCount.textContent = String(Math.max(0, currentFollowers - 1));
+    } else {
+      btn.textContent = "Đang theo dõi";
+      btn.classList.remove("btn-primary");
+      btn.classList.add("btn-secondary");
+      if (dom.profileFollowersCount) dom.profileFollowersCount.textContent = String(currentFollowers + 1);
+    }
+
+    try {
+      const data = await apiFetch(`${API}/profiles/${encodeURIComponent(userId)}/follow`, { method: "POST" });
+      // Cập nhật lại UI chính xác theo server trả về (phòng hờ)
+      if (data.following) {
+        btn.textContent = "Đang theo dõi";
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-secondary");
+      } else {
+        btn.textContent = "Theo dõi";
+        btn.classList.remove("btn-secondary");
+        btn.classList.add("btn-primary");
+      }
+    } catch (err) {
+      // Revert if failed
+      toast(err.message || "Không thể thực hiện hành động này.", "error");
+      if (isCurrentlyFollowing) {
+        btn.textContent = "Đang theo dõi";
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-secondary");
+        if (dom.profileFollowersCount) dom.profileFollowersCount.textContent = String(currentFollowers); // revert
+      } else {
+        btn.textContent = "Theo dõi";
+        btn.classList.remove("btn-secondary");
+        btn.classList.add("btn-primary");
+        if (dom.profileFollowersCount) dom.profileFollowersCount.textContent = String(currentFollowers); // revert
+      }
+    } finally {
+      btn.disabled = false;
     }
   }
 
@@ -669,6 +832,11 @@
     // Create post modal
     if (dom.openPostModalBtn) dom.openPostModalBtn.addEventListener("click", () => openModal(dom.postModal));
     if (dom.postForm) dom.postForm.addEventListener("submit", submitPost);
+    if (dom.topicSelect) {
+      dom.topicSelect.addEventListener("change", () => {
+        dom.topicSelect.classList.remove("input-error");
+      });
+    }
     if (dom.postContentInput && dom.postCharCount) {
       dom.postContentInput.addEventListener("input", () => {
         dom.postCharCount.textContent = String(dom.postContentInput.value.length);
@@ -721,6 +889,35 @@
       });
     }
     if (dom.backToCommunityBtn) dom.backToCommunityBtn.addEventListener("click", () => closeProfileView());
+
+    if (dom.editProfileBtn) {
+      dom.editProfileBtn.addEventListener("click", () => {
+        openModal(dom.editProfileModal);
+      });
+    }
+    
+    if (dom.followUserBtn) {
+      dom.followUserBtn.addEventListener("click", (e) => {
+        const uid = e.target.dataset.userId;
+        if (uid) toggleFollow(uid);
+      });
+    }
+    if (dom.editProfileForm) dom.editProfileForm.addEventListener("submit", submitEditProfile);
+    if (dom.editAvatarInput && dom.editAvatarPreview) {
+      dom.editAvatarInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = (e) => { dom.editAvatarPreview.src = e.target.result; };
+          reader.readAsDataURL(file);
+        }
+      });
+    }
+
+    if (dom.directEditAvatarBtn && dom.directAvatarInput) {
+      dom.directEditAvatarBtn.addEventListener("click", () => dom.directAvatarInput.click());
+      dom.directAvatarInput.addEventListener("change", handleDirectAvatarUpload);
+    }
 
     window.addEventListener("popstate", () => {
       const pid = new URLSearchParams(window.location.search).get("profile");

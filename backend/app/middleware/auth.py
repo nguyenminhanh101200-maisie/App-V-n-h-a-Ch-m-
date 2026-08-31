@@ -77,10 +77,7 @@ def raise_auth_required(message: str = "Yêu cầu đăng nhập để sử dụ
 
 
 async def load_user(resources: AppResources, user_id: str) -> dict[str, Any] | None:
-    try:
-        uid = int(user_id)
-    except (TypeError, ValueError):
-        return None
+    uid = str(user_id)
     async with resources.pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(

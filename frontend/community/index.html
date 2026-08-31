@@ -64,10 +64,10 @@
                         <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
                     </button>
 
-                    <div class="current-user-mini">
+                    <button type="button" class="current-user-mini" id="openMyProfileBtn" aria-label="Mở trang cá nhân">
                         <img id="navUserAvatar" src="" alt="" class="nav-user-avatar">
                         <span id="navUserName">Đang tải...</span>
-                    </div>
+                    </button>
                 </div>
             </div>
 
@@ -153,27 +153,7 @@
                     <div id="topicListContainer" class="topic-list"></div>
                 </section>
 
-                <section class="sidebar-card">
-                    <div class="sidebar-heading">
-                        <div>
-                            <p class="eyebrow">COMMUNITY</p>
-                            <h2 class="card-title">Thành viên tích cực</h2>
-                        </div>
-                        <i class="fa-solid fa-user-group card-heading-icon" aria-hidden="true"></i>
-                    </div>
 
-                    <div id="activeMemberContainer" class="active-member-list"></div>
-
-                    <!-- Nút mở trang cá nhân của tài khoản đang đăng nhập. -->
-                    <button
-                        type="button"
-                        id="openMyProfileBtn"
-                        class="personal-profile-btn"
-                    >
-                        <i class="fa-solid fa-user" aria-hidden="true"></i>
-                        <span>Cá nhân</span>
-                    </button>
-                </section>
             </aside>
         </main>
 
@@ -201,17 +181,37 @@
 
             <section class="profile-hero-card">
                 <div class="profile-identity">
-                    <img
-                        id="profileAvatar"
-                        class="profile-avatar"
-                        src=""
-                        alt=""
-                    >
+                    <div class="avatar-wrapper">
+                        <img
+                            id="profileAvatar"
+                            class="profile-avatar"
+                            src=""
+                            alt=""
+                        >
+                        <button type="button" id="directEditAvatarBtn" class="edit-avatar-btn is-hidden" aria-label="Đổi ảnh đại diện">
+                            <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                        </button>
+                        <input type="file" id="directAvatarInput" accept="image/*" hidden>
+                    </div>
                     <div class="profile-identity-text">
                         <p class="eyebrow">PROFILE</p>
                         <h1 id="profileViewTitle" class="profile-name">Đang tải...</h1>
                         <p id="profileEmail" class="profile-email is-hidden"></p>
-                        <p id="profilePostCount" class="profile-post-count">Đang tải bài viết...</p>
+                        <div class="profile-stats" style="display: flex; gap: 1.5rem; margin-top: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                            <div class="stat-item" style="display: flex; gap: 0.25rem;">
+                                <strong id="profilePostCount">0</strong> <span>bài viết</span>
+                            </div>
+                            <div class="stat-item" style="display: flex; gap: 0.25rem;">
+                                <strong id="profileFollowersCount">0</strong> <span>người theo dõi</span>
+                            </div>
+                            <div class="stat-item" style="display: flex; gap: 0.25rem;">
+                                <strong id="profileFollowingCount">0</strong> <span>đang theo dõi</span>
+                            </div>
+                        </div>
+                        <div class="profile-actions" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button type="button" id="editProfileBtn" class="btn btn-secondary is-hidden" style="margin-top: 0.5rem; width: auto;">Chỉnh sửa hồ sơ</button>
+                            <button type="button" id="followUserBtn" class="btn btn-primary is-hidden" style="margin-top: 0.5rem; width: auto;">Theo dõi</button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -227,6 +227,54 @@
                 <div id="profilePostsContainer" class="posts-container"></div>
             </section>
         </section>
+    </div>
+
+    <!-- ========================= MODAL: EDIT PROFILE ========================= -->
+    <div
+        class="modal-overlay"
+        id="editProfileModal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="editProfileModalTitle"
+        hidden
+    >
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <p class="eyebrow">EDIT</p>
+                    <h2 id="editProfileModalTitle">Chỉnh sửa hồ sơ</h2>
+                </div>
+                <button type="button" class="close-modal-btn" data-close-modal="editProfileModal" aria-label="Đóng">
+                    &times;
+                </button>
+            </div>
+            
+            <form id="editProfileForm" class="modal-body">
+                <label class="field-label" for="editUsernameInput">Tên người dùng</label>
+                <input type="text" id="editUsernameInput" name="username" class="modal-input" required>
+                
+                <label class="field-label" for="editAvatarInput">Ảnh đại diện (tùy chọn)</label>
+                <div class="avatar-upload-wrapper">
+                    <img id="editAvatarPreview" src="/avatarmacdinh.svg" alt="" class="mini-avatar" style="width: 64px; height: 64px; margin-bottom: 0.5rem; border-radius: 50%;">
+                    <input type="file" id="editAvatarInput" name="avatar" class="modal-input" accept="image/*">
+                </div>
+
+                <label class="field-label" for="editCurrentPasswordInput">Mật khẩu hiện tại (nhập nếu muốn đổi mật khẩu)</label>
+                <input type="password" id="editCurrentPasswordInput" name="current_password" class="modal-input">
+
+                <label class="field-label" for="editNewPasswordInput">Mật khẩu mới</label>
+                <input type="password" id="editNewPasswordInput" name="new_password" class="modal-input" minlength="8">
+                
+                <p id="editProfileStatus" class="form-status" style="margin-top: 1rem;"></p>
+            </form>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-close-modal="editProfileModal">Hủy</button>
+                <button type="submit" form="editProfileForm" class="btn btn-primary" id="editProfileSubmitBtn">
+                    Lưu thay đổi
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- ========================= MODAL: TẠO BÀI ========================= -->

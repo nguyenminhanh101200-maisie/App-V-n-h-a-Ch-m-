@@ -6,7 +6,6 @@ from fastapi import Form
 from app.community.repository import CommunityRepository
 from app.community.schemas import (
     ALLOWED_CATEGORIES,
-    ActiveMembersResponse,
     CommentCreate,
     CommentOut,
     CommentsResponse,
@@ -157,9 +156,4 @@ async def topic_stats(
     return {"items": await service.repo.topic_stats()}
 
 
-@router.get("/stats/active-members", response_model=ActiveMembersResponse)
-async def active_members(
-    current_user: CurrentUser = Depends(get_current_user),
-    service: CommunityService = Depends(get_service),
-) -> dict[str, Any]:
-    return {"items": await service.repo.active_members()}
+

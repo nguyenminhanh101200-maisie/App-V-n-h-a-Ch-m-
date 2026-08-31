@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Đăng nhập & Đăng ký</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,7 +25,12 @@
         </div>
         <div class="input-group">
             <label>Mật khẩu</label>
-            <input type="password" id="loginPass" placeholder="••••••••">
+            <div class="password-wrapper">
+                <input type="password" id="loginPass" placeholder="••••••••">
+                <button type="button" class="toggle-password" onclick="togglePassword('loginPass', this)" aria-label="Hiện mật khẩu">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+            </div>
             <p class="error-msg" id="loginPassError">Mật khẩu có ít nhất 8 kí tự.</p>
         </div>
         <button type="submit" class="btn-submit">Đăng nhập</button>
@@ -39,7 +45,12 @@
         </div>
         <div class="input-group">
             <label>Mật khẩu</label>
-            <input type="password" id="regPass" placeholder="Tối thiểu 8 ký tự">
+            <div class="password-wrapper">
+                <input type="password" id="regPass" placeholder="Tối thiểu 8 ký tự">
+                <button type="button" class="toggle-password" onclick="togglePassword('regPass', this)" aria-label="Hiện mật khẩu">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                </button>
+            </div>
             <p class="error-msg" id="regPassError">Mật khẩu có ít nhất 8 ký tự.</p>
         </div>
         <button type="submit" class="btn-submit">Tạo tài khoản</button>
@@ -49,6 +60,22 @@
 <script>
     function isEmail(email) {
         return /^[^\s@]+@([^\s@]+\.)+[^\s@]+$/.test(email);
+    }
+
+    function togglePassword(inputId, btn) {
+        const input = document.getElementById(inputId);
+        const icon = btn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+            btn.setAttribute('aria-label', 'Ẩn mật khẩu');
+        } else {
+            input.type = 'password';
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+            btn.setAttribute('aria-label', 'Hiện mật khẩu');
+        }
     }
 
     function switchForm(type) {

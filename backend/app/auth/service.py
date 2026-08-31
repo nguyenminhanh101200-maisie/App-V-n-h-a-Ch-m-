@@ -12,7 +12,7 @@ from typing import Any
 
 from psycopg_pool import AsyncConnectionPool
 
-_SELECT = "SELECT id::text AS id, username, email, avatar_url FROM users"
+_SELECT = "SELECT id::text AS id, username, email, avatar_url, password_hash FROM users"
 
 
 class UserRepository:
@@ -27,10 +27,7 @@ class UserRepository:
         return dict(row) if row else None
 
     async def get_by_id(self, user_id: str | int) -> dict[str, Any] | None:
-        try:
-            uid = int(user_id)
-        except (TypeError, ValueError):
-            return None
+        uid = str(user_id)
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(f"{_SELECT} WHERE id = %s", (uid,))
@@ -38,33 +35,33 @@ class UserRepository:
         return dict(row) if row else None
 
     async def create_profile(
-        self, *, email: str, username: str | None = None, avatar_url: str | None = None
+        self, *, email: str, username: str | None = None, avatar_url: str | None = None, password_hash: str | None = None
     ) -> dict[str, Any]:
         async with self.pool.connection() as conn:
             async with conn.cursor() as cur:
                 await cur.execute(
                     """
-                    INSERT INTO users (email, username, avatar_url)
-                    VALUES (%s, %s, %s)
-                    RETURNING id::text AS id, username, email, avatar_url
+                    INSERT INTO users (email, username, avatar_url, password_hash)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id::text AS id, username, email, avatar_url, password_hash
                     """,
-                    (email.strip(), username, avatar_url),
+                    (email.strip(), username, avatar_url, password_hash),
                 )
                 row = await cur.fetchone()
         return dict(row)
 
     async def get_or_create_by_email(
-        self, *, email: str, username: str | None = None
+        self, *, email: str, username: str | None = None, password_hash: str | None = None
     ) -> dict[str, Any]:
         existing = await self.get_by_email(email)
         if existing is not None:
             return existing
-        return await self.create_profile(email=email, username=username)
+        return await self.create_profile(email=email, username=username, password_hash=password_hash)
 
     async def update_profile(
-        self, *, user_id: str | int, username: str | None = None, avatar_url: str | None = None
+        self, *, user_id: str | int, username: str | None = None, avatar_url: str | None = None, **kwargs
     ) -> dict[str, Any] | None:
-        uid = int(user_id)
+        uid = str(user_id)
         sets: list[str] = []
         params: list[Any] = []
         if username is not None:
@@ -73,6 +70,9 @@ class UserRepository:
         if avatar_url is not None:
             sets.append("avatar_url = %s")
             params.append(avatar_url)
+        if kwargs.get("password_hash") is not None:
+            sets.append("password_hash = %s")
+            params.append(kwargs["password_hash"])
         if sets:
             params.append(uid)
             async with self.pool.connection() as conn:

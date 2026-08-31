@@ -24,8 +24,8 @@ async def get_profile(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict[str, Any]:
     try:
-        target_id = int(user_id)
-        viewer_id = int(current_user.id)
+        target_id = str(user_id)
+        viewer_id = str(current_user.id)
     except (TypeError, ValueError):
         raise HTTPException(404, detail={"error": "NOT_FOUND", "message": "Người dùng không tồn tại."})
 
@@ -109,6 +109,20 @@ async def get_profile(
             await cur.execute("SELECT COUNT(*) AS c FROM posts WHERE user_id = %s", (target_id,))
             post_count = int((await cur.fetchone())["c"])
 
+            await cur.execute("SELECT COUNT(*) AS c FROM follows WHERE following_id = %s", (target_id,))
+            followers_count = int((await cur.fetchone())["c"])
+
+            await cur.execute("SELECT COUNT(*) AS c FROM follows WHERE follower_id = %s", (target_id,))
+            following_count = int((await cur.fetchone())["c"])
+
+            is_following = False
+            if not is_current_user:
+                await cur.execute(
+                    "SELECT 1 FROM follows WHERE follower_id = %s AND following_id = %s",
+                    (viewer_id, target_id)
+                )
+                is_following = await cur.fetchone() is not None
+
     items: list[dict[str, Any]] = []
     for row in post_rows:
         items.append(
@@ -142,7 +156,33 @@ async def get_profile(
     return {
         "user": profile_user,
         "is_current_user": is_current_user,
+        "is_following": is_following,
         "post_count": post_count,
+        "followers_count": followers_count,
+        "following_count": following_count,
         "items": items,
         "pagination": {"page": page, "limit": limit, "has_next": has_next},
     }
+
+@router.post("/{user_id}/follow")
+async def toggle_follow(
+    request: Request,
+    user_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    try:
+        target_id = str(user_id)
+        viewer_id = str(current_user.id)
+    except (TypeError, ValueError):
+        raise HTTPException(404, detail={"error": "NOT_FOUND", "message": "Người dùng không tồn tại."})
+        
+    if target_id == viewer_id:
+        raise HTTPException(400, detail={"error": "BAD_REQUEST", "message": "Không thể tự theo dõi bản thân."})
+        
+    repo = CommunityRepository(request.app.state.resources.pool)
+    try:
+        following = await repo.toggle_follow(follower_id=viewer_id, following_id=target_id)
+    except LookupError:
+        raise HTTPException(404, detail={"error": "NOT_FOUND", "message": "Người dùng không tồn tại."})
+        
+    return {"following": following}

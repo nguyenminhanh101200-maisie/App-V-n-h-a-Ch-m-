@@ -13,6 +13,7 @@ mirrors the auth user (same id) with profile fields.
 from typing import Any
 from uuid import uuid4
 
+import bcrypt
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Response, UploadFile
 from pydantic import BaseModel, EmailStr, Field
 
@@ -80,6 +81,63 @@ async def me(user: CurrentUser = Depends(get_current_user)) -> dict[str, Any]:
     }
 
 
+@api.patch("/me")
+async def update_me(
+    request: Request,
+    response: Response,
+    username: str | None = Form(default=None),
+    current_password: str | None = Form(default=None),
+    new_password: str | None = Form(default=None),
+    avatar: UploadFile | None = File(default=None),
+    user: CurrentUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    repo = _repo(request)
+    
+    clean_username = username.strip() if username else None
+    if username is not None and not clean_username:
+        raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Tên người dùng không được để trống."})
+
+    password_hash = None
+    if new_password:
+        if len(new_password) < 8:
+            raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Mật khẩu mới phải có ít nhất 8 ký tự."})
+        if not current_password:
+            raise HTTPException(400, detail={"error": "BAD_REQUEST", "message": "Yêu cầu mật khẩu hiện tại để đổi mật khẩu mới."})
+        
+        # Verify current password
+        db_user = await repo.get_by_id(user.id)
+        if not db_user or not db_user.get("password_hash") or not bcrypt.checkpw(current_password.encode(), db_user["password_hash"].encode()):
+            raise HTTPException(401, detail={"error": "UNAUTHORIZED", "message": "Mật khẩu hiện tại không đúng."})
+        
+        password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+
+    avatar_url = None
+    if avatar is not None and avatar.filename:
+        data = await avatar.read()
+        if data:
+            if len(data) > settings.max_image_size_bytes:
+                raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Ảnh vượt quá dung lượng cho phép."})
+            path = f"avatars/{uuid4().hex}{await _extension(avatar)}"
+            avatar_url = await _gateway(request).upload_object(
+                path, data, avatar.content_type or "image/png"
+            )
+
+    updated = await repo.update_profile(
+        user_id=user.id, 
+        username=clean_username, 
+        avatar_url=avatar_url, 
+        password_hash=password_hash
+    )
+    assert updated is not None
+    set_session_cookie(response, settings, build_session_payload(updated["id"], updated["email"]))
+    
+    return {
+        "authenticated": True,
+        "user": _public_user(updated)
+    }
+
+
 @api.post("/login")
 @limiter.limit(get_settings().rate_limit_login)
 async def api_login(
@@ -88,11 +146,14 @@ async def api_login(
     response: Response,
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    auth_user = await _gateway(request).sign_in_password(payload.email, payload.password)
-    if not auth_user:
-        raise HTTPException(401, detail={"error": "AUTHENTICATION_REQUIRED", "message": "Email hoặc mật khẩu không đúng."})
     repo = _repo(request)
-    row = await repo.get_or_create_by_email(email=auth_user.get("email") or payload.email)
+    row = await repo.get_by_email(payload.email)
+    if not row or not row.get("password_hash"):
+        raise HTTPException(401, detail={"error": "AUTHENTICATION_REQUIRED", "message": "Email hoặc mật khẩu không đúng."})
+    
+    if not bcrypt.checkpw(payload.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(401, detail={"error": "AUTHENTICATION_REQUIRED", "message": "Email hoặc mật khẩu không đúng."})
+        
     set_session_cookie(response, settings, build_session_payload(row["id"], row["email"]))
     return {"authenticated": True, "user": _public_user(row)}
 
@@ -114,12 +175,13 @@ router.include_router(api)
 async def compat_register(payload: CredsRequest, request: Request) -> dict[str, Any]:
     if len(payload.password) < 8:
         raise HTTPException(422, detail={"message": "Mật khẩu phải có ít nhất 8 ký tự."})
-    gateway = _gateway(request)
-    try:
-        await gateway.admin_create_user(payload.email, payload.password)
-    except AuthConflictError:
+    repo = _repo(request)
+    existing = await repo.get_by_email(payload.email)
+    if existing:
         raise HTTPException(409, detail={"message": "Email đã được đăng ký. Vui lòng đăng nhập."})
-    row = await _repo(request).get_or_create_by_email(email=payload.email)
+        
+    hashed_pw = bcrypt.hashpw(payload.password.encode(), bcrypt.gensalt()).decode()
+    row = await repo.create_profile(email=payload.email, password_hash=hashed_pw)
     return {"message": "Đăng ký thành công. Hãy hoàn tất hồ sơ.", "userId": row["id"]}
 
 
@@ -132,13 +194,10 @@ async def compat_login(
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
     repo = _repo(request)
-    existing = await repo.get_by_email(payload.email)
-    if existing is None:
-        raise HTTPException(404, detail={"message": "Email chưa được đăng ký."})
-    auth_user = await _gateway(request).sign_in_password(payload.email, payload.password)
-    if not auth_user:
-        raise HTTPException(401, detail={"message": "Sai mật khẩu."})
-    row = await repo.get_or_create_by_email(email=auth_user.get("email") or payload.email)
+    row = await repo.get_by_email(payload.email)
+    if row is None or not row.get("password_hash") or not bcrypt.checkpw(payload.password.encode(), row["password_hash"].encode()):
+        raise HTTPException(401, detail={"message": "Email hoặc mật khẩu không đúng."})
+        
     set_session_cookie(response, settings, build_session_payload(row["id"], row["email"]))
     return {
         "message": "Đăng nhập thành công.",

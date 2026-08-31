@@ -37,8 +37,12 @@ class CommunityService:
             raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Bài viết phải có nội dung hoặc ít nhất một ảnh."})
         if len(content) > self.settings.max_content_length:
             raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Nội dung bài viết quá dài."})
+            
+        if not category:
+            raise HTTPException(422, detail={"error": "CATEGORY_REQUIRED", "message": "Vui lòng chọn một chuyên mục cho bài viết."})
         if category not in ALLOWED_CATEGORIES:
             raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": "Chủ đề không hợp lệ."})
+            
         if len(files) > self.settings.max_upload_images:
             raise HTTPException(422, detail={"error": "VALIDATION_ERROR", "message": f"Chỉ được tải tối đa {self.settings.max_upload_images} ảnh."})
 

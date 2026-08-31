@@ -216,6 +216,26 @@ a {
     max-width: 180px;
     font-size: 13px;
     font-weight: 700;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    outline: none;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+}
+
+.current-user-mini:hover {
+    opacity: 0.8;
+}
+
+.current-user-mini span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-block;
+    max-width: 130px;
 }
 
 .nav-user-avatar {
@@ -526,10 +546,25 @@ a {
     background: var(--surface-soft-2);
 }
 
+.embedded-avatar.author-link {
+    cursor: pointer;
+}
+.embedded-avatar.author-link:hover {
+    opacity: 0.8;
+}
+
 .embedded-name {
     display: block;
     font-size: 13px;
     font-weight: 800;
+}
+
+.embedded-name.author-link {
+    cursor: pointer;
+}
+.embedded-name.author-link:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
 }
 
 .embedded-time {
@@ -747,8 +782,7 @@ a {
     font-size: 16px;
 }
 
-.topic-list,
-.active-member-list {
+.topic-list {
     display: grid;
 }
 
@@ -782,56 +816,6 @@ a {
     font-size: 11px;
 }
 
-.active-member {
-    padding: 10px 0;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    border-bottom: 1px solid #f6f1ec;
-}
-
-.active-member:last-child {
-    border-bottom: 0;
-}
-
-.member-avatar {
-    width: 40px;
-    height: 40px;
-    flex: 0 0 40px;
-    border-radius: 50%;
-    object-fit: cover;
-}
-
-.member-info {
-    min-width: 0;
-}
-
-.member-name {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.member-stats {
-    color: var(--text-muted);
-    font-size: 11px;
-}
-
-.rank-badge {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: var(--surface-soft-2);
-    color: var(--primary-color);
-    font-size: 11px;
-    font-weight: 800;
-}
 
 /* ========================= EMPTY / ERROR / LOADING ========================= */
 .state-card {
@@ -1574,4 +1558,45 @@ a {
     .profile-action-menu {
         left: -4px;
     }
+}
+
+/* Edit Profile Modal */
+.avatar-upload-wrapper { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 15px; }
+.avatar-upload-wrapper img { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-color); }
+
+
+/* Direct Avatar Update styles */
+.avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+.edit-avatar-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+.edit-avatar-btn:hover {
+  background: var(--surface-hover);
+  transform: scale(1.05);
+}
+.edit-avatar-btn i {
+  font-size: 0.9rem;
+}
+
+/* Error highlight */
+.input-error {
+  border-color: red !important;
+  box-shadow: 0 0 0 2px rgba(255, 0, 0, 0.2);
 }
